@@ -5,6 +5,8 @@ import HomeScreen from './screens/HomeScreen';
 import AddMealScreen from './screens/AddMealScreen';
 import ViewMealsScreen from './screens/ViewMealsScreen';
 import GoalsScreen from './screens/GoalsScreen';
+import QuestionnaireScreen from './screens/QuestionnaireScreen';
+import RecommendedMealsScreen from './screens/RecommendedMealsScreen';
 import Colors from './constants/Colors';
 
 const Stack = createNativeStackNavigator();
@@ -13,6 +15,13 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
+        <Stack.Screen 
+          name="Questionnaire" 
+          component={QuestionnaireScreen} 
+          options={{ 
+            headerShown: false 
+          }}
+        />
         <Stack.Screen 
           name="Home" 
           component={HomeScreen} 
@@ -54,6 +63,17 @@ export default function App() {
           component={GoalsScreen} 
           options={{ 
             title: 'Nutrition Goals',
+            headerStyle: {
+              backgroundColor: Colors.primary,
+            },
+            headerTintColor: Colors.white,
+          }}
+        />
+        <Stack.Screen 
+          name="RecommendedMeals" 
+          component={RecommendedMealsScreen} 
+          options={{ 
+            title: 'Recommended for You',
             headerStyle: {
               backgroundColor: Colors.primary,
             },
