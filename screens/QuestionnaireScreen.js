@@ -63,7 +63,7 @@ export default function QuestionnaireScreen({ navigation }) {
         [
           {
             text: 'Continue',
-            onPress: () => navigation.replace('Home')
+            onPress: () => navigation.replace('RecommendedMeals')
           }
         ]
       );

@@ -9,12 +9,18 @@ import {
   Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Colors from '../constants/Colors';
 
 export default function ViewMealsScreen() {
   const [meals, setMeals] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [goals, setGoals] = useState(null);
   const [dailyTotals, setDailyTotals] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fats: 0
+  });
+  const [targets, setTargets] = useState({
     calories: 0,
     protein: 0,
     carbs: 0,
@@ -22,18 +28,27 @@ export default function ViewMealsScreen() {
   });
 
   useEffect(() => {
-    loadMeals();
-    loadGoals();
+    loadData();
   }, []);
 
-  const loadGoals = async () => {
+  const loadData = async () => {
+    await Promise.all([loadMeals(), loadTargets()]);
+  };
+
+  const loadTargets = async () => {
     try {
-      const storedGoals = await AsyncStorage.getItem('nutritionGoals');
-      if (storedGoals) {
-        setGoals(JSON.parse(storedGoals));
+      const prefs = await AsyncStorage.getItem('userPreferences');
+      if (prefs) {
+        const parsedPrefs = JSON.parse(prefs);
+        setTargets({
+          calories: Number(parsedPrefs.calories) || 0,
+          protein: Number(parsedPrefs.protein) || 0,
+          carbs: Number(parsedPrefs.carbs) || 0,
+          fats: Number(parsedPrefs.fats) || 0
+        });
       }
     } catch (error) {
-      console.error('Error loading goals:', error);
+      console.error('Error loading targets:', error);
     }
   };
 
@@ -44,10 +59,10 @@ export default function ViewMealsScreen() {
     );
 
     const totals = todayMeals.reduce((acc, meal) => ({
-      calories: acc.calories + (meal.calories || 0),
-      protein: acc.protein + (meal.protein || 0),
-      carbs: acc.carbs + (meal.carbs || 0),
-      fats: acc.fats + (meal.fats || 0)
+      calories: acc.calories + (Number(meal.calories) || 0),
+      protein: acc.protein + (Number(meal.protein) || 0),
+      carbs: acc.carbs + (Number(meal.carbs) || 0),
+      fats: acc.fats + (Number(meal.fats) || 0)
     }), { calories: 0, protein: 0, carbs: 0, fats: 0 });
 
     setDailyTotals(totals);
@@ -78,17 +93,43 @@ export default function ViewMealsScreen() {
     }
   };
 
+  const calculateProgress = (current, target) => {
+    if (!target) return 0;
+    return Math.min((current / target) * 100, 100);
+  };
+
+  const renderProgressBar = (label, current, target) => {
+    const progress = calculateProgress(current, target);
+    return (
+      <View style={styles.progressContainer}>
+        <View style={styles.progressLabelContainer}>
+          <Text style={styles.progressLabel}>
+            {label}: {current} / {target || '?'}
+          </Text>
+          <Text style={styles.progressPercent}>
+            {target ? `${Math.round(progress)}%` : 'No target set'}
+          </Text>
+        </View>
+        <View style={styles.progressBarBackground}>
+          <View 
+            style={[
+              styles.progressBarFill, 
+              { width: `${progress}%` },
+              progress > 100 && styles.progressBarExceeded
+            ]} 
+          />
+        </View>
+      </View>
+    );
+  };
+
   const renderDailyProgress = () => (
     <View style={styles.progressCard}>
       <Text style={styles.progressTitle}>Today's Progress</Text>
-      <View style={styles.progressRow}>
-        <Text>Calories: {dailyTotals.calories} {goals?.calories ? `/ ${goals.calories}` : ''}</Text>
-        <Text>Protein: {dailyTotals.protein}g {goals?.protein ? `/ ${goals.protein}g` : ''}</Text>
-      </View>
-      <View style={styles.progressRow}>
-        <Text>Carbs: {dailyTotals.carbs}g {goals?.carbs ? `/ ${goals.carbs}g` : ''}</Text>
-        <Text>Fats: {dailyTotals.fats}g {goals?.fats ? `/ ${goals.fats}g` : ''}</Text>
-      </View>
+      {renderProgressBar('Calories', dailyTotals.calories, targets.calories)}
+      {renderProgressBar('Protein (g)', dailyTotals.protein, targets.protein)}
+      {renderProgressBar('Carbs (g)', dailyTotals.carbs, targets.carbs)}
+      {renderProgressBar('Fats (g)', dailyTotals.fats, targets.fats)}
     </View>
   );
 
@@ -133,7 +174,10 @@ export default function ViewMealsScreen() {
       renderItem={renderMeal}
       keyExtractor={item => item.id.toString()}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={loadMeals} />
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={loadData}
+        />
       }
       ListHeaderComponent={renderDailyProgress}
     />
@@ -143,71 +187,91 @@ export default function ViewMealsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  mealCard: {
-    backgroundColor: 'white',
-    margin: 10,
-    padding: 15,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  mealName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  mealDate: {
-    color: '#666',
-    marginBottom: 10,
-  },
-  nutritionInfo: {
-    marginVertical: 10,
-  },
-  notes: {
-    fontStyle: 'italic',
-    color: '#666',
-    marginTop: 10,
+    backgroundColor: Colors.background,
   },
   progressCard: {
-    backgroundColor: 'white',
+    backgroundColor: Colors.white,
     margin: 10,
     padding: 15,
     borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   progressTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#FF3B30',
+    color: Colors.primary,
+    marginBottom: 15,
   },
-  progressRow: {
+  progressContainer: {
+    marginVertical: 8,
+  },
+  progressLabelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 5,
+    marginBottom: 4,
+  },
+  progressLabel: {
+    fontSize: 14,
+    color: Colors.text,
+  },
+  progressPercent: {
+    fontSize: 14,
+    color: Colors.secondary,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 4,
+  },
+  progressBarExceeded: {
+    backgroundColor: Colors.accent,
+  },
+  mealCard: {
+    backgroundColor: Colors.white,
+    margin: 10,
+    padding: 15,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   mealHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  mealName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  mealDate: {
+    color: Colors.secondary,
+    marginVertical: 5,
+  },
+  nutritionInfo: {
+    marginVertical: 10,
+  },
+  notes: {
+    fontStyle: 'italic',
+    color: Colors.secondary,
+    marginTop: 5,
+  },
   deleteButton: {
     fontSize: 24,
-    color: '#FF3B30',
+    color: Colors.accent,
     fontWeight: 'bold',
   },
 }); 

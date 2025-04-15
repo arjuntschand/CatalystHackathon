@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Image } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, Image, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../constants/Colors';
 
@@ -19,6 +19,32 @@ export default function HomeScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Error checking questionnaire:', error);
+    }
+  };
+
+  const handleRecommendedMeals = async () => {
+    try {
+      const preferences = await AsyncStorage.getItem('userPreferences');
+      if (preferences) {
+        navigation.navigate('RecommendedMeals');
+      } else {
+        Alert.alert(
+          'Set Your Goals',
+          'To get meal recommendations, we need to know your fitness goals first.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Set Goals',
+              onPress: () => navigation.navigate('Questionnaire')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking preferences:', error);
     }
   };
 
@@ -51,7 +77,7 @@ export default function HomeScreen({ navigation }) {
 
         <TouchableOpacity 
           style={[styles.button, styles.recommendButton]}
-          onPress={() => navigation.navigate('RecommendedMeals')}
+          onPress={handleRecommendedMeals}
         >
           <Text style={styles.buttonText}>Recommended Meals</Text>
         </TouchableOpacity>

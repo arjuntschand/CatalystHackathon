@@ -14,14 +14,7 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen 
-          name="Questionnaire" 
-          component={QuestionnaireScreen} 
-          options={{ 
-            headerShown: false 
-          }}
-        />
+      <Stack.Navigator initialRouteName="Home">
         <Stack.Screen 
           name="Home" 
           component={HomeScreen} 
@@ -34,6 +27,17 @@ export default function App() {
             headerTitleStyle: {
               fontWeight: 'bold',
             },
+          }}
+        />
+        <Stack.Screen 
+          name="Questionnaire" 
+          component={QuestionnaireScreen} 
+          options={{ 
+            title: 'Set Your Goals',
+            headerStyle: {
+              backgroundColor: Colors.primary,
+            },
+            headerTintColor: Colors.white,
           }}
         />
         <Stack.Screen 

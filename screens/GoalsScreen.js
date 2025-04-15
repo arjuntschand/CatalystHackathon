@@ -6,12 +6,42 @@ import {
   TextInput, 
   TouchableOpacity, 
   Alert,
-  ScrollView 
+  ScrollView,
+  Pressable 
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Colors from '../constants/Colors';
 
-export default function GoalsScreen() {
-  const [goals, setGoals] = useState({
+const QUESTIONS = [
+  {
+    id: 'fitnessGoal',
+    question: "What is your fitness goal?",
+    options: ["Lose Weight", "Gain Muscle", "Maintain Weight", "Improve Health"]
+  },
+  {
+    id: 'activityLevel',
+    question: "What is your current activity level?",
+    options: ["Sedentary", "Light Exercise", "Moderate Exercise", "Heavy Exercise"]
+  },
+  {
+    id: 'dietaryRestrictions',
+    question: "Do you have any dietary restrictions?",
+    options: ["None", "Vegetarian", "Vegan", "Gluten-Free", "Dairy-Free"]
+  }
+];
+
+const MACRO_TARGETS = [
+  { id: 'calories', label: 'Daily Calories Target', placeholder: 'e.g., 2000' },
+  { id: 'protein', label: 'Daily Protein Target (g)', placeholder: 'e.g., 150' },
+  { id: 'carbs', label: 'Daily Carbs Target (g)', placeholder: 'e.g., 250' },
+  { id: 'fats', label: 'Daily Fats Target (g)', placeholder: 'e.g., 65' }
+];
+
+export default function GoalsScreen({ navigation }) {
+  const [answers, setAnswers] = useState({
+    fitnessGoal: '',
+    activityLevel: '',
+    dietaryRestrictions: '',
     calories: '',
     protein: '',
     carbs: '',
@@ -19,24 +49,66 @@ export default function GoalsScreen() {
   });
 
   useEffect(() => {
-    loadGoals();
+    loadSavedAnswers();
   }, []);
 
-  const loadGoals = async () => {
+  const loadSavedAnswers = async () => {
     try {
-      const storedGoals = await AsyncStorage.getItem('nutritionGoals');
-      if (storedGoals) {
-        setGoals(JSON.parse(storedGoals));
+      const savedAnswers = await AsyncStorage.getItem('userPreferences');
+      if (savedAnswers) {
+        setAnswers(JSON.parse(savedAnswers));
       }
     } catch (error) {
-      console.error('Error loading goals:', error);
+      console.error('Error loading answers:', error);
     }
   };
 
-  const saveGoals = async () => {
+  const handleAnswer = (questionId, answer) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: answer
+    }));
+  };
+
+  const saveAnswers = async () => {
+    // Validate all fields are filled
+    const emptyFields = [];
+    
+    // Check main questions
+    QUESTIONS.forEach(question => {
+      if (!answers[question.id]) {
+        emptyFields.push(question.question);
+      }
+    });
+
+    // Check macro targets
+    MACRO_TARGETS.forEach(target => {
+      if (!answers[target.id]) {
+        emptyFields.push(target.label);
+      }
+    });
+
+    if (emptyFields.length > 0) {
+      Alert.alert(
+        'Missing Information',
+        `Please fill in the following:\n${emptyFields.join('\n')}`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
-      await AsyncStorage.setItem('nutritionGoals', JSON.stringify(goals));
-      Alert.alert('Success', 'Nutrition goals saved successfully!');
+      await AsyncStorage.setItem('userPreferences', JSON.stringify(answers));
+      Alert.alert(
+        'Success',
+        'Your goals have been saved!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack()
+          }
+        ]
+      );
     } catch (error) {
       Alert.alert('Error', 'Failed to save goals');
     }
@@ -44,49 +116,59 @@ export default function GoalsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.goalCard}>
-        <Text style={styles.title}>Set Daily Nutrition Goals</Text>
-        
-        <Text style={styles.label}>Daily Calories Target</Text>
-        <TextInput
-          style={styles.input}
-          value={goals.calories}
-          onChangeText={(text) => setGoals({...goals, calories: text})}
-          keyboardType="numeric"
-          placeholder="Enter target calories"
-        />
+      <Text style={styles.title}>Set Your Nutrition Goals</Text>
+      <Text style={styles.subtitle}>
+        Help us personalize your meal recommendations
+      </Text>
 
-        <Text style={styles.label}>Protein Goal (g)</Text>
-        <TextInput
-          style={styles.input}
-          value={goals.protein}
-          onChangeText={(text) => setGoals({...goals, protein: text})}
-          keyboardType="numeric"
-          placeholder="Enter protein goal"
-        />
+      {/* Render main questions */}
+      {QUESTIONS.map(question => (
+        <View style={styles.questionContainer} key={question.id}>
+          <Text style={styles.questionText}>{question.question}</Text>
+          <View style={styles.optionsContainer}>
+            {question.options.map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.optionButton,
+                  answers[question.id] === option && styles.selectedOption
+                ]}
+                onPress={() => handleAnswer(question.id, option)}
+              >
+                <Text 
+                  style={[
+                    styles.optionText,
+                    answers[question.id] === option && styles.selectedOptionText
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
 
-        <Text style={styles.label}>Carbs Goal (g)</Text>
-        <TextInput
-          style={styles.input}
-          value={goals.carbs}
-          onChangeText={(text) => setGoals({...goals, carbs: text})}
-          keyboardType="numeric"
-          placeholder="Enter carbs goal"
-        />
-
-        <Text style={styles.label}>Fats Goal (g)</Text>
-        <TextInput
-          style={styles.input}
-          value={goals.fats}
-          onChangeText={(text) => setGoals({...goals, fats: text})}
-          keyboardType="numeric"
-          placeholder="Enter fats goal"
-        />
-
-        <TouchableOpacity style={styles.button} onPress={saveGoals}>
-          <Text style={styles.buttonText}>Save Goals</Text>
-        </TouchableOpacity>
+      {/* Render macro targets */}
+      <View style={styles.questionContainer}>
+        <Text style={styles.questionText}>Set Your Daily Targets</Text>
+        {MACRO_TARGETS.map(target => (
+          <View key={target.id} style={styles.macroInputContainer}>
+            <Text style={styles.macroLabel}>{target.label}</Text>
+            <TextInput
+              style={styles.macroInput}
+              keyboardType="numeric"
+              placeholder={target.placeholder}
+              value={answers[target.id]}
+              onChangeText={(text) => handleAnswer(target.id, text)}
+            />
+          </View>
+        ))}
       </View>
+
+      <TouchableOpacity style={styles.saveButton} onPress={saveAnswers}>
+        <Text style={styles.saveButtonText}>Save Goals</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -94,49 +176,84 @@ export default function GoalsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-  },
-  goalCard: {
-    backgroundColor: 'white',
+    backgroundColor: Colors.background,
     padding: 20,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
+    color: Colors.primary,
     textAlign: 'center',
-    color: '#FF3B30',
+    marginBottom: 10,
   },
-  label: {
+  subtitle: {
     fontSize: 16,
-    marginBottom: 5,
-    color: '#333',
+    color: Colors.secondary,
+    textAlign: 'center',
+    marginBottom: 30,
   },
-  input: {
-    backgroundColor: '#f8f8f8',
-    padding: 12,
-    borderRadius: 8,
+  questionContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  questionText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
     marginBottom: 15,
+  },
+  optionsContainer: {
+    gap: 10,
+  },
+  optionButton: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    padding: 15,
+  },
+  selectedOption: {
+    backgroundColor: Colors.primary,
+  },
+  optionText: {
+    color: Colors.primary,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  selectedOptionText: {
+    color: Colors.white,
+  },
+  macroInputContainer: {
+    marginBottom: 15,
+  },
+  macroLabel: {
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 5,
+  },
+  macroInput: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    padding: 15,
     fontSize: 16,
   },
-  button: {
-    backgroundColor: '#FF3B30',
-    padding: 15,
+  saveButton: {
+    backgroundColor: Colors.primary,
     borderRadius: 8,
-    marginTop: 10,
+    padding: 15,
+    marginVertical: 20,
   },
-  buttonText: {
-    color: 'white',
+  saveButtonText: {
+    color: Colors.white,
     fontSize: 18,
     textAlign: 'center',
     fontWeight: 'bold',

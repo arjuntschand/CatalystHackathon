@@ -10,30 +10,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../constants/Colors';
 import { MEALS_BY_EATERY } from '../constants/MealData';
-import { calculateRecommendations } from '../utils/recommendationEngine';
-
-const MEAL_RECOMMENDATIONS = {
-  'Lose Weight': [
-    { id: 1, name: 'Caesar Salad', eateryId: 1, reason: 'Low calorie, high protein' },
-    { id: 2, name: 'Chicken Teriyaki Bowl', eateryId: 4, reason: 'Lean protein, complex carbs' },
-    { id: 3, name: 'Miso Soup', eateryId: 4, reason: 'Low calorie, filling' }
-  ],
-  'Gain Muscle': [
-    { id: 1, name: 'Chicken Teriyaki Bowl', eateryId: 4, reason: 'High protein, good carbs' },
-    { id: 2, name: 'Turkey Club', eateryId: 1, reason: 'Protein-rich, healthy fats' },
-    { id: 3, name: 'BBQ Chicken Pizza', eateryId: 2, reason: 'Protein and carbs for recovery' }
-  ],
-  'Maintain Weight': [
-    { id: 1, name: 'Grilled Chicken Sandwich', eateryId: 1, reason: 'Balanced macros' },
-    { id: 2, name: 'Vegetable Stir Fry', eateryId: 4, reason: 'Nutrient-rich, moderate calories' },
-    { id: 3, name: 'Yogurt Parfait', eateryId: 3, reason: 'Healthy snack option' }
-  ],
-  'Improve Health': [
-    { id: 1, name: 'Vegetable Stir Fry', eateryId: 4, reason: 'Rich in vegetables and nutrients' },
-    { id: 2, name: 'Fruit Bowl', eateryId: 3, reason: 'Vitamins and antioxidants' },
-    { id: 3, name: 'Sushi Roll', eateryId: 4, reason: 'Omega-3 fatty acids' }
-  ]
-};
 
 export default function RecommendedMealsScreen({ navigation }) {
   const [preferences, setPreferences] = useState(null);
@@ -49,33 +25,145 @@ export default function RecommendedMealsScreen({ navigation }) {
       if (prefs) {
         const parsedPrefs = JSON.parse(prefs);
         setPreferences(parsedPrefs);
-        const recommendedMeals = calculateRecommendations(parsedPrefs, MEALS_BY_EATERY);
-        setRecommendations(recommendedMeals);
+        generateRecommendations(parsedPrefs);
+      } else {
+        Alert.alert(
+          'No Goals Set',
+          'Please set your nutrition goals first to get personalized recommendations.',
+          [
+            {
+              text: 'Set Goals',
+              onPress: () => navigation.navigate('Goals')
+            },
+            {
+              text: 'Cancel',
+              onPress: () => navigation.goBack(),
+              style: 'cancel'
+            }
+          ]
+        );
       }
     } catch (error) {
       console.error('Error loading preferences:', error);
     }
   };
 
-  const getMealDetails = (eateryId, mealName) => {
-    const eateryMeals = MEALS_BY_EATERY[eateryId];
-    return eateryMeals.find(meal => meal.name === mealName);
+  const generateRecommendations = (prefs) => {
+    const allMeals = Object.values(MEALS_BY_EATERY).flat();
+    let filteredMeals = [...allMeals];
+
+    // Filter based on dietary restrictions
+    if (prefs.dietaryRestrictions !== 'None') {
+      const restrictions = {
+        'Vegetarian': ['Chicken', 'Turkey', 'BBQ', 'Wings', 'Burger', 'Bacon'],
+        'Vegan': ['Chicken', 'Turkey', 'BBQ', 'Wings', 'Burger', 'Cheese', 'Mayo', 'Yogurt'],
+        'Gluten-Free': ['Bread', 'Pizza', 'Pasta', 'Muffin'],
+        'Dairy-Free': ['Cheese', 'Yogurt', 'Mayo', 'Alfredo']
+      };
+
+      const restrictedItems = restrictions[prefs.dietaryRestrictions] || [];
+      filteredMeals = filteredMeals.filter(meal => 
+        !restrictedItems.some(item => 
+          meal.name.toLowerCase().includes(item.toLowerCase())
+        )
+      );
+    }
+
+    // Calculate meal scores based on goals
+    const scoredMeals = filteredMeals.map(meal => {
+      let score = 0;
+      let reasons = [];
+
+      const calorieTarget = Number(prefs.calories) / 3; // Assume 3 meals per day
+      const proteinTarget = Number(prefs.protein) / 3;
+      const carbsTarget = Number(prefs.carbs) / 3;
+      const fatsTarget = Number(prefs.fats) / 3;
+
+      // Score based on fitness goal
+      switch (prefs.fitnessGoal) {
+        case 'Lose Weight':
+          if (meal.calories <= calorieTarget) {
+            score += 3;
+            reasons.push('Fits calorie goal');
+          }
+          if (meal.protein >= proteinTarget) {
+            score += 2;
+            reasons.push('High in protein');
+          }
+          break;
+
+        case 'Gain Muscle':
+          if (meal.protein >= proteinTarget) {
+            score += 3;
+            reasons.push('High in protein');
+          }
+          if (meal.calories >= calorieTarget) {
+            score += 2;
+            reasons.push('Calorie-dense');
+          }
+          if (meal.carbs >= carbsTarget) {
+            score += 1;
+            reasons.push('Good carb content');
+          }
+          break;
+
+        case 'Maintain Weight':
+          if (Math.abs(meal.calories - calorieTarget) <= 100) {
+            score += 3;
+            reasons.push('Balanced calories');
+          }
+          if (Math.abs(meal.protein - proteinTarget) <= 5) {
+            score += 2;
+            reasons.push('Good protein balance');
+          }
+          break;
+
+        case 'Improve Health':
+          if (meal.name.toLowerCase().includes('salad') || 
+              meal.name.toLowerCase().includes('vegetable')) {
+            score += 3;
+            reasons.push('Nutrient-rich');
+          }
+          if (meal.fats <= fatsTarget) {
+            score += 2;
+            reasons.push('Moderate in fats');
+          }
+          break;
+      }
+
+      // Additional scoring based on macro targets
+      const proteinRatio = meal.protein / meal.calories;
+      if (proteinRatio >= 0.15) {
+        score += 1;
+        reasons.push('Good protein-to-calorie ratio');
+      }
+
+      return {
+        ...meal,
+        score,
+        reasons: reasons.join(', ')
+      };
+    });
+
+    // Sort by score and take top 5
+    const recommendations = scoredMeals
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    setRecommendations(recommendations);
   };
 
-  const addToMeals = async (recommendation) => {
+  const addToMeals = async (meal) => {
     try {
-      const mealDetails = getMealDetails(recommendation.eateryId, recommendation.name);
-      if (!mealDetails) return;
-
-      const meal = {
+      const newMeal = {
         id: Date.now(),
-        ...mealDetails,
+        ...meal,
         date: new Date().toISOString(),
       };
 
       const existingMeals = await AsyncStorage.getItem('meals');
       const meals = existingMeals ? JSON.parse(existingMeals) : [];
-      meals.push(meal);
+      meals.push(newMeal);
       
       await AsyncStorage.setItem('meals', JSON.stringify(meals));
       Alert.alert('Success', 'Meal added to your list!');
@@ -84,38 +172,38 @@ export default function RecommendedMealsScreen({ navigation }) {
     }
   };
 
-  const renderRecommendation = ({ item }) => {
-    const mealDetails = getMealDetails(item.eateryId, item.name);
-    if (!mealDetails) return null;
-
-    return (
-      <View style={styles.recommendationCard}>
-        <View style={styles.recommendationHeader}>
-          <Text style={styles.mealName}>{item.name}</Text>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => addToMeals(item)}
-          >
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.reasonText}>Why? {item.reason}</Text>
-        <View style={styles.nutritionInfo}>
-          <Text style={styles.nutritionText}>Calories: {mealDetails.calories}</Text>
-          <Text style={styles.nutritionText}>Protein: {mealDetails.protein}g</Text>
-          <Text style={styles.nutritionText}>Carbs: {mealDetails.carbs}g</Text>
-          <Text style={styles.nutritionText}>Fats: {mealDetails.fats}g</Text>
-        </View>
+  const renderRecommendation = ({ item }) => (
+    <View style={styles.recommendationCard}>
+      <View style={styles.recommendationHeader}>
+        <Text style={styles.mealName}>{item.name}</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => addToMeals(item)}
+        >
+          <Text style={styles.addButtonText}>Add</Text>
+        </TouchableOpacity>
       </View>
-    );
-  };
+      <Text style={styles.reasonText}>{item.reasons}</Text>
+      <View style={styles.nutritionInfo}>
+        <Text style={styles.nutritionText}>Calories: {item.calories}</Text>
+        <Text style={styles.nutritionText}>Protein: {item.protein}g</Text>
+        <Text style={styles.nutritionText}>Carbs: {item.carbs}g</Text>
+        <Text style={styles.nutritionText}>Fats: {item.fats}g</Text>
+      </View>
+      <View style={styles.targetComparison}>
+        <Text style={styles.comparisonText}>
+          {Math.round((item.calories / (Number(preferences?.calories) / 3)) * 100)}% of calorie target
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Recommended for Your Goals</Text>
-      {preferences && (
+      {preferences?.fitnessGoal && (
         <Text style={styles.subtitle}>
-          Based on your {preferences[1]} goal
+          Based on your {preferences.fitnessGoal.toLowerCase()} goal
         </Text>
       )}
       <FlatList
@@ -193,9 +281,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginBottom: 10,
   },
   nutritionText: {
     fontSize: 14,
     color: Colors.text,
+  },
+  targetComparison: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 10,
+  },
+  comparisonText: {
+    fontSize: 14,
+    color: Colors.secondary,
+    textAlign: 'right',
   },
 }); 
